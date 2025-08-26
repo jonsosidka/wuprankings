@@ -65,8 +65,15 @@
       Powered by Fatals.net
     </footer>
     <script>
+      function getQueryParam(name) {
+        const params = new URLSearchParams(window.location.search);
+        return params.get(name);
+      }
+
       async function fetchRankings() {
-        const res = await fetch(`/api/rankings`);
+        const leagueId = getQueryParam('leagueId');
+        const qs = leagueId ? `?leagueId=${encodeURIComponent(leagueId)}` : '';
+        const res = await fetch(`/api/rankings${qs}`);
         if (!res.ok) throw new Error('Failed to load rankings');
         return res.json();
       }
