@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "api/*.js": {
+      "includeFiles": "data/**"
+    }
+  },
+  "rewrites": [
+    { "source": "/", "destination": "/public/index.html" },
+    { "source": "/(.*)", "destination": "/public/$1" }
+  ]
+}
+
