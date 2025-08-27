@@ -66,9 +66,10 @@
     </footer>
     <script>
       function getLeagueId() {
+        const DEFAULT_LEAGUE_ID = '1257482024906657792';
         const params = new URLSearchParams(location.search);
         const fromQuery = (params.get('leagueId') || '').trim();
-        return fromQuery || '';
+        return fromQuery || DEFAULT_LEAGUE_ID;
       }
 
       async function fetchRankings() {
@@ -137,7 +138,7 @@
           renderBoard(data);
         } catch (e) {
           const board = document.getElementById('board');
-          board.innerHTML = `<div style="padding:16px;color:#ffb4c8">${e.message}. Add ?leagueId=YOUR_LEAGUE_ID to the URL.</div>`;
+          board.innerHTML = `<div style="padding:16px;color:#ffb4c8">${e.message}.</div>`;
         }
       }
 

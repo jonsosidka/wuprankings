@@ -5,6 +5,7 @@ const { parse } = require('csv-parse');
 
 // Location of CSV data in the repository (read-only on Vercel)
 const DATA_DIR = path.join(process.cwd(), 'data');
+const DEFAULT_LEAGUE_ID = '1257482024906657792';
 
 // Known name aliases to bridge Sleeper vs projections differences
 // Use lowercase normalized keys
@@ -163,7 +164,10 @@ function estimateTeamPoints(roster, nameIndex, dstMap) {
 
 module.exports = async (req, res) => {
   try {
-    const leagueId = (req.query && req.query.leagueId ? String(req.query.leagueId).trim() : '') || (process.env.LEAGUE_ID || '').trim();
+    const leagueId =
+      (req.query && req.query.leagueId ? String(req.query.leagueId).trim() : '') ||
+      (process.env.LEAGUE_ID || '').trim() ||
+      DEFAULT_LEAGUE_ID;
     if (!leagueId) return res.status(400).json({ error: 'Missing LEAGUE_ID' });
 
     const projections = await loadAllProjections();

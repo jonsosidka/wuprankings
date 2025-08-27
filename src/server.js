@@ -11,6 +11,7 @@ app.use(cors());
 app.use(express.json());
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
+const DEFAULT_LEAGUE_ID = '1257482024906657792';
 // Known name aliases to bridge Sleeper vs projections differences
 // Use lowercase normalized keys
 const NAME_ALIASES = new Map([
@@ -168,7 +169,7 @@ function estimateTeamPoints(roster, nameIndex, dstMap) {
 
 app.get('/api/rankings', async (req, res) => {
   try {
-    const leagueId = process.env.LEAGUE_ID || String(req.query.leagueId || '').trim();
+    const leagueId = (String(req.query.leagueId || '').trim()) || (process.env.LEAGUE_ID || '').trim() || DEFAULT_LEAGUE_ID;
     if (!leagueId) return res.status(400).json({ error: 'Missing LEAGUE_ID' });
 
     const projections = await loadAllProjections();
