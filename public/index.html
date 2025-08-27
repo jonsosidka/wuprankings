@@ -65,8 +65,16 @@
       Powered by Fatals.net
     </footer>
     <script>
+      function getLeagueId() {
+        const params = new URLSearchParams(location.search);
+        const fromQuery = (params.get('leagueId') || '').trim();
+        return fromQuery || '';
+      }
+
       async function fetchRankings() {
-        const res = await fetch(`/api/rankings`);
+        const leagueId = getLeagueId();
+        const qs = leagueId ? `?leagueId=${encodeURIComponent(leagueId)}` : '';
+        const res = await fetch(`/api/rankings${qs}`);
         if (!res.ok) throw new Error('Failed to load rankings');
         return res.json();
       }
@@ -128,7 +136,8 @@
           const data = await fetchRankings();
           renderBoard(data);
         } catch (e) {
-          alert(e.message);
+          const board = document.getElementById('board');
+          board.innerHTML = `<div style="padding:16px;color:#ffb4c8">${e.message}. Add ?leagueId=YOUR_LEAGUE_ID to the URL.</div>`;
         }
       }
 

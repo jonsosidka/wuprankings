@@ -1,16 +1,11 @@
-const express = require('express');
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { parse } = require('csv-parse');
-const cors = require('cors');
-require('dotenv').config();
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+// Location of CSV data in the repository (read-only on Vercel)
+const DATA_DIR = path.join(process.cwd(), 'data');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
 // Known name aliases to bridge Sleeper vs projections differences
 // Use lowercase normalized keys
 const NAME_ALIASES = new Map([
@@ -27,7 +22,8 @@ const NAME_ALIASES = new Map([
 function loadCsvProjections(filename, position) {
   return new Promise((resolve, reject) => {
     const records = new Map();
-    fs.createReadStream(path.join(DATA_DIR, filename))
+    const filePath = path.join(DATA_DIR, filename);
+    fs.createReadStream(filePath)
       .pipe(parse({ columns: true, skip_empty_lines: true }))
       .on('data', (row) => {
         const player = (row.player || '').trim();
@@ -145,7 +141,6 @@ function estimateTeamPoints(roster, nameIndex, dstMap) {
       details.push({ name: entry.name, position: entry.position, projected: match.fantasy, isStarter: !!entry.isStarter });
     } else if (entry.position === 'DEF' || entry.position === 'DST') {
       // Sleeper uses 'DEF' for team defenses. Try mapping against DST.csv by team code.
-      // Attempt to match like "Denver D/ST" to team.
       for (const { player, fantasy, team } of dstMap.values()) {
         if (player.toLowerCase().includes('d/st')) {
           const teamName = player.split(' D/ST')[0];
@@ -166,9 +161,9 @@ function estimateTeamPoints(roster, nameIndex, dstMap) {
   return { total, details };
 }
 
-app.get('/api/rankings', async (req, res) => {
+module.exports = async (req, res) => {
   try {
-    const leagueId = process.env.LEAGUE_ID || String(req.query.leagueId || '').trim();
+    const leagueId = (req.query && req.query.leagueId ? String(req.query.leagueId).trim() : '') || (process.env.LEAGUE_ID || '').trim();
     if (!leagueId) return res.status(400).json({ error: 'Missing LEAGUE_ID' });
 
     const projections = await loadAllProjections();
@@ -182,16 +177,11 @@ app.get('/api/rankings', async (req, res) => {
 
     results.sort((a, b) => b.totalProjected - a.totalProjected);
     const withRank = results.map((r, idx) => ({ rank: idx + 1, ...r }));
-    res.json(withRank);
+    res.status(200).json(withRank);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to compute rankings' });
   }
-});
+};
 
-app.use(express.static(path.join(__dirname, '..', 'public')));
 
-const port = Number(process.env.PORT) || 3000;
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
-});
