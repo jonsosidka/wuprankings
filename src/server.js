@@ -190,6 +190,80 @@ app.get('/api/rankings', async (req, res) => {
   }
 });
 
+// Available free agents based on projections vs rostered players
+app.get('/api/available', async (req, res) => {
+  try {
+    const leagueId = (String(req.query.leagueId || '').trim()) || (process.env.LEAGUE_ID || '').trim() || DEFAULT_LEAGUE_ID;
+    if (!leagueId) return res.status(400).json({ error: 'Missing LEAGUE_ID' });
+
+    const projections = await loadAllProjections();
+    const rosters = await fetchSleeperLeagueRosters(leagueId);
+
+    // Build position -> Set of normalized rostered names (include alias when exists)
+    const rosteredByPos = new Map();
+    const rosteredDstTeams = []; // strings of defense names from Sleeper (e.g., "Denver Broncos")
+    for (const r of rosters) {
+      for (const entry of r.entries) {
+        const pos = entry.position;
+        if (!rosteredByPos.has(pos)) rosteredByPos.set(pos, new Set());
+        const set = rosteredByPos.get(pos);
+        const key = normalizeName(entry.name);
+        set.add(key);
+        const alias = NAME_ALIASES.get(key);
+        if (alias) set.add(alias);
+        if (pos === 'DST' || pos === 'DEF') {
+          rosteredDstTeams.push(entry.name.toLowerCase());
+        }
+      }
+    }
+
+    function isDstRostered(dstPlayerName, teamCode) {
+      // dstPlayerName like "Denver D/ST" -> extract team
+      const lower = String(dstPlayerName || '').toLowerCase();
+      let teamName = lower;
+      if (lower.includes(' d/st')) teamName = lower.split(' d/st')[0];
+      for (const rosterName of rosteredDstTeams) {
+        if (rosterName.includes(teamName) || (teamCode && rosterName.includes(String(teamCode).toLowerCase()))) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    const available = [];
+    const allMaps = [projections.qbs, projections.rbs, projections.wrs, projections.tes, projections.ks, projections.dsts];
+    for (const map of allMaps) {
+      for (const rec of map.values()) {
+        const { player, position, fantasy, team } = rec;
+        if (position === 'DST') {
+          if (!isDstRostered(player, team)) {
+            available.push({ player, position, projected: fantasy, team });
+          }
+          continue;
+        }
+        const set = rosteredByPos.get(position);
+        const key = normalizeName(player);
+        const alias = NAME_ALIASES.get(key);
+        const taken = (set && (set.has(key) || (alias && set.has(alias)))) || false;
+        if (!taken) {
+          available.push({ player, position, projected: fantasy, team });
+        }
+      }
+    }
+
+    available.sort((a, b) => b.projected - a.projected);
+    res.json({ count: available.length, available });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to compute available players' });
+  }
+});
+
+// Serve hidden FA page without extension
+app.get('/fa', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'fa.html'));
+});
+
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const port = Number(process.env.PORT) || 3000;

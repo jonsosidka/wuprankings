@@ -6,7 +6,9 @@
     }
   },
   "routes": [
+    { "src": "/api/rankings.available", "dest": "/api/rankings.js" },
     { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/fa", "dest": "/public/fa.html" },
     { "src": "/", "dest": "/public/index.html" },
     { "src": "/(.*)", "dest": "/public/$1" }
   ]

@@ -1,0 +1,243 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FA Suggestions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+      :root { --bg:#0b0f17; --panel:#121826; --accent:#00e5ff; --accent2:#ff3d71; --text:#e8eef7; --muted:#8590a2; --gold:#ffd700; }
+      *{box-sizing:border-box}
+      body{margin:0;background:radial-gradient(circle at 20% 10%,#10182a,#080c13);color:var(--text);font-family:Roboto,system-ui,-apple-system,Segoe UI,Helvetica,Arial,sans-serif}
+      header{padding:24px 16px;text-align:center;border-bottom:1px solid #1e2740;background:linear-gradient(180deg,rgba(18,24,38,.9),rgba(18,24,38,.6));backdrop-filter:blur(6px);position:sticky;top:0;z-index:10}
+      h1{margin:0;font-family:Orbitron,monospace;letter-spacing:2px;text-transform:uppercase;font-weight:900;font-size:24px}
+      main{max-width:1080px;margin:24px auto;padding:0 16px}
+      .panel{background:linear-gradient(180deg,#0f1728,#0b101a);border:1px solid #1c2440;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.5),inset 0 0 40px rgba(0,229,255,.05);padding:16px}
+      .controls{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+      select, input[type="search"]{background:#0e1422;border:1px solid #243252;color:var(--text);padding:10px 12px;border-radius:8px;width:100%}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+      .table{width:100%;border-collapse:collapse}
+      th,td{padding:8px;border-bottom:1px solid #1a223c;font-size:13px}
+      th{color:var(--muted);text-align:left}
+      .pos{font-family:Orbitron,monospace;color:var(--accent)}
+      .delta-up{color:#4cd964}
+      .delta-down{color:#ff3b30}
+      .pill{display:inline-block;padding:2px 6px;border:1px solid #243252;border-radius:999px;font-size:11px;color:var(--muted)}
+      .hint{color:var(--muted);font-size:12px;margin-top:8px}
+      a{color:var(--accent)}
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Free Agent Upgrade Suggestions</h1>
+    </header>
+    <main>
+      <div class="panel">
+        <div class="controls">
+          <div>
+            <label class="pill">League</label>
+            <input id="leagueId" placeholder="Sleeper League ID" />
+          </div>
+          <div>
+            <label class="pill">Team</label>
+            <select id="teamSelect"></select>
+          </div>
+        </div>
+        <div class="controls">
+          <div>
+            <label class="pill">Filter Position</label>
+            <select id="positionFilter">
+              <option value="ALL">All</option>
+              <option value="QB">QB</option>
+              <option value="RB">RB</option>
+              <option value="WR">WR</option>
+              <option value="TE">TE</option>
+              <option value="K">K</option>
+              <option value="DST">DST</option>
+            </select>
+          </div>
+          <div>
+            <label class="pill">Search</label>
+            <input id="search" type="search" placeholder="Search players" />
+          </div>
+        </div>
+
+        <div class="grid">
+          <div>
+            <h3 class="pill">Top Available</h3>
+            <table class="table" id="availableTable">
+              <thead>
+                <tr><th>Pos</th><th>Player</th><th>Proj</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div>
+            <h3 class="pill">Upgrade Suggestions</h3>
+            <table class="table" id="suggestionsTable">
+              <thead>
+                <tr><th>Pos</th><th>Drop</th><th>Add</th><th>Delta</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+            <div class="hint">Suggestions compare each bench player to the best available at the same position. Starters are shown only if an available player beats their projection.</div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <script>
+      function getDefaultLeagueId() {
+        const params = new URLSearchParams(location.search);
+        return params.get('leagueId') || '1257482024906657792';
+      }
+
+      async function fetchJson(url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Request failed');
+        return res.json();
+      }
+
+      async function loadRankings(leagueId) {
+        return fetchJson(`/api/rankings?leagueId=${encodeURIComponent(leagueId)}`);
+      }
+      async function loadAvailable(leagueId) {
+        // Works in local express (/api/available) and Vercel function route (/api/rankings.available)
+        const tryUrls = [
+          `/api/available?leagueId=${encodeURIComponent(leagueId)}`,
+          `/api/rankings.available?leagueId=${encodeURIComponent(leagueId)}`
+        ];
+        for (const url of tryUrls) {
+          try {
+            const data = await fetchJson(url);
+            if (data && data.available) return data.available;
+          } catch (e) {}
+        }
+        throw new Error('Unable to load available players');
+      }
+
+      function format(n){ return (Math.round(n*10)/10).toFixed(1); }
+
+      function populateTeams(teams) {
+        const sel = document.getElementById('teamSelect');
+        sel.innerHTML = '';
+        teams.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.teamName;
+          opt.textContent = t.teamName;
+          sel.appendChild(opt);
+        });
+      }
+
+      function renderAvailable(allAvailable, filterPos, searchTerm) {
+        const body = document.querySelector('#availableTable tbody');
+        body.innerHTML = '';
+        let list = allAvailable;
+        if (filterPos && filterPos !== 'ALL') list = list.filter(p => p.position === filterPos);
+        if (searchTerm) {
+          const q = searchTerm.toLowerCase();
+          list = list.filter(p => p.player.toLowerCase().includes(q));
+        }
+        list.slice(0, 100).forEach(p => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td class="pos">${p.position}</td><td>${p.player}</td><td>${format(p.projected)}</td>`;
+          body.appendChild(tr);
+        });
+      }
+
+      function buildSuggestions(selectedTeam, available) {
+        const starters = selectedTeam.players.filter(p => p.isStarter);
+        const bench = selectedTeam.players.filter(p => !p.isStarter);
+        const byPosAvail = new Map();
+        for (const a of available) {
+          if (!byPosAvail.has(a.position)) byPosAvail.set(a.position, []);
+          byPosAvail.get(a.position).push(a);
+        }
+        for (const arr of byPosAvail.values()) arr.sort((a,b)=> b.projected - a.projected);
+
+        const suggestions = [];
+        function consider(entry) {
+          const arr = byPosAvail.get(entry.position) || [];
+          if (!arr.length) return;
+          const best = arr[0];
+          const delta = best.projected - entry.projected;
+          if (delta > 0.1) {
+            suggestions.push({ position: entry.position, drop: entry.name, dropProj: entry.projected, add: best.player, addProj: best.projected, delta });
+          }
+        }
+        bench.forEach(consider);
+        starters.forEach(consider);
+        suggestions.sort((a,b)=> b.delta - a.delta);
+        return suggestions;
+      }
+
+      function renderSuggestions(suggestions, filterPos, searchTerm) {
+        const body = document.querySelector('#suggestionsTable tbody');
+        body.innerHTML = '';
+        let list = suggestions;
+        if (filterPos && filterPos !== 'ALL') list = list.filter(s => s.position === filterPos);
+        if (searchTerm) {
+          const q = searchTerm.toLowerCase();
+          list = list.filter(s => s.add.toLowerCase().includes(q) || s.drop.toLowerCase().includes(q));
+        }
+        list.slice(0, 100).forEach(s => {
+          const tr = document.createElement('tr');
+          const cls = s.delta >= 0 ? 'delta-up' : 'delta-down';
+          tr.innerHTML = `<td class="pos">${s.position}</td><td>${s.drop} <span class="pill">${format(s.dropProj)}</span></td><td>${s.add} <span class="pill">${format(s.addProj)}</span></td><td class="${cls}">${format(s.delta)}</td>`;
+          body.appendChild(tr);
+        });
+      }
+
+      let ALL_AVAILABLE = [];
+      let TEAMS = [];
+
+      async function init() {
+        const leagueInput = document.getElementById('leagueId');
+        const teamSelect = document.getElementById('teamSelect');
+        const positionFilter = document.getElementById('positionFilter');
+        const search = document.getElementById('search');
+
+        leagueInput.value = getDefaultLeagueId();
+
+        async function refresh() {
+          const leagueId = leagueInput.value.trim();
+          const [rankings, available] = await Promise.all([
+            loadRankings(leagueId),
+            loadAvailable(leagueId)
+          ]);
+          TEAMS = rankings;
+          ALL_AVAILABLE = available;
+          populateTeams(TEAMS);
+          teamSelect.dispatchEvent(new Event('change'));
+          renderAvailable(ALL_AVAILABLE, positionFilter.value, search.value.trim());
+        }
+
+        teamSelect.addEventListener('change', () => {
+          const teamName = teamSelect.value;
+          const team = TEAMS.find(t => t.teamName === teamName);
+          if (!team) return;
+          const suggestions = buildSuggestions(team, ALL_AVAILABLE);
+          renderSuggestions(suggestions, positionFilter.value, search.value.trim());
+        });
+        positionFilter.addEventListener('change', () => {
+          renderAvailable(ALL_AVAILABLE, positionFilter.value, search.value.trim());
+          teamSelect.dispatchEvent(new Event('change'));
+        });
+        search.addEventListener('input', () => {
+          renderAvailable(ALL_AVAILABLE, positionFilter.value, search.value.trim());
+          teamSelect.dispatchEvent(new Event('change'));
+        });
+        leagueInput.addEventListener('change', refresh);
+
+        await refresh();
+      }
+
+      init().catch(err => {
+        document.body.innerHTML += `<div style="padding:16px;color:#ffb4c8">${err.message}</div>`;
+      });
+    </script>
+  </body>
+  </html>
+
+
