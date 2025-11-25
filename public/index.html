@@ -21,7 +21,12 @@
       body { margin: 0; background: radial-gradient(circle at 20% 10%, #10182a, #080c13); color: var(--text); font-family: Roboto, system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif; }
       header { padding: 24px 16px; text-align: center; border-bottom: 1px solid #1e2740; background: linear-gradient(180deg, rgba(18,24,38,0.9), rgba(18,24,38,0.6)); backdrop-filter: blur(6px); position: sticky; top: 0; z-index: 10; }
       h1 { margin: 0; font-family: Orbitron, monospace; letter-spacing: 2px; text-transform: uppercase; font-weight: 900; font-size: 28px; }
-      #controls { display: none; }
+      #controls { margin-top: 12px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+      #leagueForm { display: flex; gap: 8px; }
+      #leagueInput { padding: 10px 12px; background: #0e1422; border: 1px solid #243252; color: var(--text); border-radius: 8px; min-width: 260px; outline: none; }
+      #leagueInput::placeholder { color: var(--muted); }
+      #leagueSubmit { background: var(--accent2); border: 1px solid #243252; color: #fff; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: 700; }
+      #leagueSubmit:hover { filter: brightness(1.1); }
       main { max-width: 980px; margin: 24px auto; padding: 0 16px; }
       .board { background: linear-gradient(180deg, #0f1728, #0b101a); border: 1px solid #1c2440; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.5), inset 0 0 40px rgba(0, 229, 255, 0.05); overflow: hidden; }
       .row { display: grid; grid-template-columns: 64px 1fr 140px; align-items: center; padding: 16px; border-bottom: 1px solid #1a223c; position: relative; }
@@ -55,7 +60,12 @@
   <body>
     <header>
       <h1>WUP Fantasy Power Rankings</h1>
-      <div id="controls"></div>
+      <div id="controls">
+        <form id="leagueForm" autocomplete="off">
+          <input id="leagueInput" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Enter Sleeper League ID" />
+          <button id="leagueSubmit" type="submit">Load</button>
+        </form>
+      </div>
     </header>
     <main>
       <div class="board" id="board"></div>
@@ -132,6 +142,34 @@
         document.body.classList.remove('show-details');
       }
 
+      function setLeagueIdInUrl(id) {
+        const params = new URLSearchParams(location.search);
+        if (id) {
+          params.set('leagueId', id.trim());
+        } else {
+          params.delete('leagueId');
+        }
+        const qs = params.toString();
+        const newUrl = qs ? `${location.pathname}?${qs}` : location.pathname;
+        history.replaceState(null, '', newUrl);
+      }
+
+      function initControls() {
+        const input = document.getElementById('leagueInput');
+        const form = document.getElementById('leagueForm');
+        if (!input || !form) return;
+        input.value = getLeagueId();
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const val = (input.value || '').trim();
+          setLeagueIdInUrl(val);
+          closeDetails();
+          const board = document.getElementById('board');
+          if (board) board.innerHTML = '<div style="padding:16px;color:#8590a2">Loading...</div>';
+          load();
+        });
+      }
+
       async function load() {
         try {
           const data = await fetchRankings();
@@ -143,6 +181,7 @@
       }
 
       // Auto-load
+      initControls();
       load();
     </script>
   </body>
